@@ -120,7 +120,8 @@ window.addEventListener('resize', resize);
 
 // --- Simulation State ---
 const DIRS = ['N','S','E','W'];
-const DIR_VEC = { N:[0,1], S:[0,-1], E:[-1,0], W:[1,0] };
+// N=top-to-bottom, S=bottom-to-top, E=left-to-right, W=right-to-left
+const DIR_VEC = { N:[0,1], S:[0,-1], E:[1,0], W:[-1,0] };
 
 function createSim(adaptive) {
   return {
@@ -157,17 +158,16 @@ initSims();
 
 function spawnCar(sim, w, h) {
   const intensity = +intensitySlider.value;
-  // spawn probability per frame
   if (Math.random() > 0.012 * intensity) return;
   const dir = DIRS[Math.floor(Math.random() * 4)];
-  const roadW = 30, cx = w / 2, cy = h / 2;
-  let x, y, lane;
-  // lane offset: incoming lane
-  lane = (Math.random() < 0.5 ? -1 : 1) * 8;
-  if (dir === 'N') { x = cx + 8; y = h + 10; }
-  else if (dir === 'S') { x = cx - 8; y = -10; }
-  else if (dir === 'E') { x = w + 10; y = cy + 8; }
-  else { x = -10; y = cy - 8; }
+  const cx = w / 2, cy = h / 2;
+  let x, y;
+  // N: enters from top, drives down. S: enters from bottom, drives up.
+  // E: enters from left, drives right. W: enters from right, drives left.
+  if (dir === 'N') { x = cx + 8; y = -10; }
+  else if (dir === 'S') { x = cx - 8; y = h + 10; }
+  else if (dir === 'E') { x = -10; y = cy + 8; }
+  else { x = w + 10; y = cy - 8; }
   const speed = 1.2 + Math.random() * 0.6;
   sim.cars.push({ x, y, dir, speed, waiting: false, waitFrames: 0, passed: false });
 }
@@ -244,11 +244,12 @@ function updateCars(sim, w, h) {
 
     let shouldStop = false;
 
-    // Check if car is approaching intersection and light is red
-    if (c.dir === 'N' && c.y > cy + stopDist && c.y < cy + stopDist + 40 && !nsGreen && !nsYellow) shouldStop = true;
-    if (c.dir === 'S' && c.y < cy - stopDist && c.y > cy - stopDist - 40 && !nsGreen && !nsYellow) shouldStop = true;
-    if (c.dir === 'E' && c.x > cx + stopDist && c.x < cx + stopDist + 40 && !ewGreen && !ewYellow) shouldStop = true;
-    if (c.dir === 'W' && c.x < cx - stopDist && c.x > cx - stopDist - 40 && !ewGreen && !ewYellow) shouldStop = true;
+    // N approaches from above (y < cy), S from below (y > cy)
+    // E approaches from left (x < cx), W from right (x > cx)
+    if (c.dir === 'N' && c.y < cy - stopDist && c.y > cy - stopDist - 40 && !nsGreen && !nsYellow) shouldStop = true;
+    if (c.dir === 'S' && c.y > cy + stopDist && c.y < cy + stopDist + 40 && !nsGreen && !nsYellow) shouldStop = true;
+    if (c.dir === 'E' && c.x < cx - stopDist && c.x > cx - stopDist - 40 && !ewGreen && !ewYellow) shouldStop = true;
+    if (c.dir === 'W' && c.x > cx + stopDist && c.x < cx + stopDist + 40 && !ewGreen && !ewYellow) shouldStop = true;
 
     // Also stop if car ahead is stopped (simple queue)
     if (!shouldStop) {
@@ -257,9 +258,8 @@ function updateCars(sim, w, h) {
         const dx = other.x - c.x, dy = other.y - c.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
         if (dist < 18 && dist > 0) {
-          // Check if other is ahead
           const v = DIR_VEC[c.dir];
-          if (dx * v[0] + dy * v[1] < 0 && other.waiting) shouldStop = true;
+          if (dx * v[0] + dy * v[1] > 0 && other.waiting) shouldStop = true;
         }
       }
     }
@@ -273,12 +273,12 @@ function updateCars(sim, w, h) {
       c.y += v[1] * c.speed;
     }
 
-    // Check passed
+    // Check passed through intersection
     if (!c.passed) {
-      const through = (c.dir === 'N' && c.y < cy - 20) ||
-                       (c.dir === 'S' && c.y > cy + 20) ||
-                       (c.dir === 'E' && c.x < cx - 20) ||
-                       (c.dir === 'W' && c.x > cx + 20);
+      const through = (c.dir === 'N' && c.y > cy + 20) ||
+                       (c.dir === 'S' && c.y < cy - 20) ||
+                       (c.dir === 'E' && c.x > cx + 20) ||
+                       (c.dir === 'W' && c.x < cx - 20);
       if (through) {
         c.passed = true;
         sim.passed++;
