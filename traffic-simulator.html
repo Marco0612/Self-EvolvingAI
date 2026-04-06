@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Adaptive Traffic Control Simulator</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0f1117; color: #e0e0e0; overflow-x: hidden; }
+
+  .header { text-align: center; padding: 18px 0 10px; background: linear-gradient(135deg, #1a1d2e, #252940); border-bottom: 1px solid #333; }
+  .header h1 { font-size: 1.5rem; letter-spacing: 1px; color: #fff; }
+  .header p { font-size: 0.82rem; color: #8a8fa8; margin-top: 3px; }
+
+  .controls { display: flex; justify-content: center; align-items: center; gap: 14px; padding: 12px; background: #181b28; border-bottom: 1px solid #2a2d3e; flex-wrap: wrap; }
+  .controls button { padding: 8px 20px; border: none; border-radius: 6px; font-size: 0.82rem; font-weight: 600; cursor: pointer; transition: .2s; }
+  .btn-start { background: #22c55e; color: #fff; }
+  .btn-start:hover { background: #16a34a; }
+  .btn-pause { background: #f59e0b; color: #fff; }
+  .btn-pause:hover { background: #d97706; }
+  .btn-reset { background: #ef4444; color: #fff; }
+  .btn-reset:hover { background: #dc2626; }
+  .slider-group { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; color: #aaa; }
+  .slider-group input[type=range] { width: 120px; accent-color: #6366f1; }
+
+  .main { display: grid; grid-template-columns: 1fr 1fr; gap: 0; height: calc(100vh - 140px); }
+  .panel { display: flex; flex-direction: column; border-right: 1px solid #2a2d3e; }
+  .panel:last-child { border-right: none; }
+  .panel-title { text-align: center; padding: 8px; font-size: 0.9rem; font-weight: 700; letter-spacing: 0.5px; }
+  .panel:first-child .panel-title { background: #1e293b; color: #f87171; }
+  .panel:last-child .panel-title { background: #1e293b; color: #60a5fa; }
+
+  canvas { flex: 1; width: 100%; background: #1a1f2e; display: block; }
+
+  .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; background: #12141f; border-top: 1px solid #2a2d3e; }
+  .metric { text-align: center; padding: 7px 4px; border-right: 1px solid #222; }
+  .metric:last-child { border-right: none; }
+  .metric .label { font-size: 0.65rem; color: #777; text-transform: uppercase; letter-spacing: 0.5px; }
+  .metric .value { font-size: 1rem; font-weight: 700; margin-top: 2px; }
+  .panel:first-child .metric .value { color: #f87171; }
+  .panel:last-child .metric .value { color: #60a5fa; }
+
+  .status-bar { background: #181b28; border-top: 1px solid #2a2d3e; padding: 10px 20px; display: flex; gap: 18px; align-items: center; flex-wrap: wrap; min-height: 48px; }
+  .status-bar .status-label { font-size: 0.75rem; color: #6366f1; font-weight: 700; text-transform: uppercase; }
+  .status-bar .status-text { font-size: 0.8rem; color: #ccc; }
+  .status-step { display: inline-flex; align-items: center; gap: 5px; font-size: 0.72rem; color: #555; }
+  .status-step.active { color: #a5b4fc; }
+  .status-step .dot { width: 7px; height: 7px; border-radius: 50%; background: #333; }
+  .status-step.active .dot { background: #6366f1; box-shadow: 0 0 6px #6366f1; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Adaptive Traffic Control Simulator</h1>
+  <p>Static AI vs Self-Evolving AI — Real-Time Comparison</p>
+</div>
+
+<div class="controls">
+  <button class="btn-start" onclick="start()">▶ Start</button>
+  <button class="btn-pause" onclick="pause()">⏸ Pause</button>
+  <button class="btn-reset" onclick="reset()">↺ Reset</button>
+  <div class="slider-group">
+    <span>Traffic Intensity:</span>
+    <input type="range" id="intensitySlider" min="1" max="10" value="4">
+    <span id="intensityVal">4</span>
+  </div>
+</div>
+
+<div class="main">
+  <!-- Static AI Panel -->
+  <div class="panel">
+    <div class="panel-title">Static Traffic AI</div>
+    <canvas id="cvStatic"></canvas>
+    <div class="metrics" id="metricsStatic">
+      <div class="metric"><div class="label">Cars Passed</div><div class="value" id="s_passed">0</div></div>
+      <div class="metric"><div class="label">Avg Wait (s)</div><div class="value" id="s_wait">0.0</div></div>
+      <div class="metric"><div class="label">Congestion</div><div class="value" id="s_cong">Low</div></div>
+      <div class="metric"><div class="label">Adaptations</div><div class="value" id="s_adapt">0</div></div>
+    </div>
+  </div>
+  <!-- Self-Evolving AI Panel -->
+  <div class="panel">
+    <div class="panel-title">Self-Evolving Traffic AI</div>
+    <canvas id="cvEvolving"></canvas>
+    <div class="metrics" id="metricsEvolving">
+      <div class="metric"><div class="label">Cars Passed</div><div class="value" id="e_passed">0</div></div>
+      <div class="metric"><div class="label">Avg Wait (s)</div><div class="value" id="e_wait">0.0</div></div>
+      <div class="metric"><div class="label">Congestion</div><div class="value" id="e_cong">Low</div></div>
+      <div class="metric"><div class="label">Adaptations</div><div class="value" id="e_adapt">0</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="status-bar">
+  <span class="status-label">Self-Evolving AI:</span>
+  <span class="status-step" id="st1"><span class="dot"></span> Monitoring</span>
+  <span class="status-step" id="st2"><span class="dot"></span> Evaluating</span>
+  <span class="status-step" id="st3"><span class="dot"></span> Adapting</span>
+  <span class="status-step" id="st4"><span class="dot"></span> Redeploying</span>
+  <span class="status-text" id="statusText">Idle — press Start to begin.</span>
+</div>
+
+<script>
+const intensitySlider = document.getElementById('intensitySlider');
+const intensityVal = document.getElementById('intensityVal');
+intensitySlider.oninput = () => intensityVal.textContent = intensitySlider.value;
+
+const cvS = document.getElementById('cvStatic');
+const cvE = document.getElementById('cvEvolving');
+const ctxS = cvS.getContext('2d');
+const ctxE = cvE.getContext('2d');
+
+let running = false, animId = null;
+
+function resize() {
+  [cvS, cvE].forEach(c => { c.width = c.clientWidth; c.height = c.clientHeight; });
+}
+window.addEventListener('resize', resize);
+
+// --- Simulation State ---
+const DIRS = ['N','S','E','W'];
+const DIR_VEC = { N:[0,1], S:[0,-1], E:[-1,0], W:[1,0] };
+
+function createSim(adaptive) {
+  return {
+    adaptive,
+    cars: [],
+    passed: 0,
+    totalWait: 0,
+    totalPassed: 0,
+    adaptations: 0,
+    // Traffic light: 'NS' or 'EW' has green
+    greenAxis: 'NS',
+    timer: 0,
+    greenDuration: 180, // frames
+    yellowDuration: 30,
+    phase: 'green', // green, yellow
+    phaseTimer: 0,
+    // adaptive fields
+    nsQueue: 0,
+    ewQueue: 0,
+    evalCooldown: 0,
+    statusStep: 0, // 0=monitor,1=eval,2=adapt,3=redeploy
+    statusTimer: 0,
+  };
+}
+
+let simS, simE, frameTick;
+
+function initSims() {
+  simS = createSim(false);
+  simE = createSim(true);
+  frameTick = 0;
+}
+initSims();
+
+function spawnCar(sim, w, h) {
+  const intensity = +intensitySlider.value;
+  // spawn probability per frame
+  if (Math.random() > 0.012 * intensity) return;
+  const dir = DIRS[Math.floor(Math.random() * 4)];
+  const roadW = 30, cx = w / 2, cy = h / 2;
+  let x, y, lane;
+  // lane offset: incoming lane
+  lane = (Math.random() < 0.5 ? -1 : 1) * 8;
+  if (dir === 'N') { x = cx + 8; y = h + 10; }
+  else if (dir === 'S') { x = cx - 8; y = -10; }
+  else if (dir === 'E') { x = w + 10; y = cy + 8; }
+  else { x = -10; y = cy - 8; }
+  const speed = 1.2 + Math.random() * 0.6;
+  sim.cars.push({ x, y, dir, speed, waiting: false, waitFrames: 0, passed: false });
+}
+
+function lightColor(sim, axis) {
+  if (sim.greenAxis === axis) return sim.phase === 'green' ? 'green' : 'yellow';
+  return 'red';
+}
+
+function updateLight(sim) {
+  sim.phaseTimer++;
+  if (sim.phase === 'green' && sim.phaseTimer >= sim.greenDuration) {
+    sim.phase = 'yellow';
+    sim.phaseTimer = 0;
+  } else if (sim.phase === 'yellow' && sim.phaseTimer >= sim.yellowDuration) {
+    sim.phase = 'green';
+    sim.phaseTimer = 0;
+    sim.greenAxis = sim.greenAxis === 'NS' ? 'EW' : 'NS';
+  }
+}
+
+function adaptiveLogic(sim) {
+  if (!sim.adaptive) return;
+  // Count queued cars per axis
+  let nsQ = 0, ewQ = 0;
+  for (const c of sim.cars) {
+    if (c.waiting) {
+      if (c.dir === 'N' || c.dir === 'S') nsQ++;
+      else ewQ++;
+    }
+  }
+  sim.nsQueue = nsQ;
+  sim.ewQueue = ewQ;
+
+  // Status pipeline
+  sim.statusTimer++;
+  if (sim.statusTimer % 60 === 0) sim.statusStep = 0; // monitoring
+  if (sim.statusTimer % 60 === 20) sim.statusStep = 1; // evaluating
+
+  // Evaluate congestion and adapt
+  sim.evalCooldown--;
+  const congested = Math.max(nsQ, ewQ);
+  if (congested > 4 && sim.evalCooldown <= 0 && sim.phase === 'green') {
+    const dominant = nsQ > ewQ ? 'NS' : 'EW';
+    if (sim.greenAxis !== dominant) {
+      // Force switch sooner
+      sim.phaseTimer = sim.greenDuration - 10;
+      sim.statusStep = 2; // adapting
+      setTimeout(() => { sim.statusStep = 3; }, 400); // redeploy
+      sim.adaptations++;
+      sim.evalCooldown = 90;
+    } else {
+      // Extend green for dominant
+      sim.greenDuration = Math.min(300, 180 + congested * 12);
+      sim.statusStep = 2;
+      setTimeout(() => { sim.statusStep = 3; }, 400);
+      sim.adaptations++;
+      sim.evalCooldown = 90;
+    }
+  } else if (congested <= 2) {
+    sim.greenDuration = 180; // reset to default
+  }
+}
+
+function updateCars(sim, w, h) {
+  const cx = w / 2, cy = h / 2;
+  const stopDist = 38;
+
+  for (const c of sim.cars) {
+    const nsGreen = lightColor(sim, 'NS') === 'green';
+    const ewGreen = lightColor(sim, 'EW') === 'green';
+    const nsYellow = lightColor(sim, 'NS') === 'yellow';
+    const ewYellow = lightColor(sim, 'EW') === 'yellow';
+
+    let shouldStop = false;
+
+    // Check if car is approaching intersection and light is red
+    if (c.dir === 'N' && c.y > cy + stopDist && c.y < cy + stopDist + 40 && !nsGreen && !nsYellow) shouldStop = true;
+    if (c.dir === 'S' && c.y < cy - stopDist && c.y > cy - stopDist - 40 && !nsGreen && !nsYellow) shouldStop = true;
+    if (c.dir === 'E' && c.x > cx + stopDist && c.x < cx + stopDist + 40 && !ewGreen && !ewYellow) shouldStop = true;
+    if (c.dir === 'W' && c.x < cx - stopDist && c.x > cx - stopDist - 40 && !ewGreen && !ewYellow) shouldStop = true;
+
+    // Also stop if car ahead is stopped (simple queue)
+    if (!shouldStop) {
+      for (const other of sim.cars) {
+        if (other === c || other.dir !== c.dir) continue;
+        const dx = other.x - c.x, dy = other.y - c.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < 18 && dist > 0) {
+          // Check if other is ahead
+          const v = DIR_VEC[c.dir];
+          if (dx * v[0] + dy * v[1] < 0 && other.waiting) shouldStop = true;
+        }
+      }
+    }
+
+    c.waiting = shouldStop;
+    if (shouldStop) {
+      c.waitFrames++;
+    } else {
+      const v = DIR_VEC[c.dir];
+      c.x += v[0] * c.speed;
+      c.y += v[1] * c.speed;
+    }
+
+    // Check passed
+    if (!c.passed) {
+      const through = (c.dir === 'N' && c.y < cy - 20) ||
+                       (c.dir === 'S' && c.y > cy + 20) ||
+                       (c.dir === 'E' && c.x < cx - 20) ||
+                       (c.dir === 'W' && c.x > cx + 20);
+      if (through) {
+        c.passed = true;
+        sim.passed++;
+        sim.totalPassed++;
+        sim.totalWait += c.waitFrames;
+      }
+    }
+  }
+
+  // Remove off-screen cars
+  sim.cars = sim.cars.filter(c => c.x > -30 && c.x < w + 30 && c.y > -30 && c.y < h + 30);
+}
+
+function congestionLabel(sim) {
+  const q = sim.cars.filter(c => c.waiting).length;
+  if (q > 10) return 'High';
+  if (q > 4) return 'Medium';
+  return 'Low';
+}
+
+// --- Drawing ---
+function drawSim(ctx, sim, w, h) {
+  const cx = w / 2, cy = h / 2;
+  const roadW = 36;
+
+  // Background
+  ctx.fillStyle = '#1a1f2e';
+  ctx.fillRect(0, 0, w, h);
+
+  // Roads
+  ctx.fillStyle = '#2a3040';
+  ctx.fillRect(cx - roadW, 0, roadW * 2, h); // vertical
+  ctx.fillRect(0, cy - roadW, w, roadW * 2); // horizontal
+
+  // Road lines (dashed center)
+  ctx.setLineDash([8, 10]);
+  ctx.strokeStyle = '#444';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(cx, 0); ctx.lineTo(cx, cy - roadW);
+  ctx.moveTo(cx, cy + roadW); ctx.lineTo(cx, h);
+  ctx.moveTo(0, cy); ctx.lineTo(cx - roadW, cy);
+  ctx.moveTo(cx + roadW, cy); ctx.lineTo(w, cy);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Intersection box
+  ctx.fillStyle = '#333a4d';
+  ctx.fillRect(cx - roadW, cy - roadW, roadW * 2, roadW * 2);
+
+  // Traffic lights
+  drawLight(ctx, cx, cy - roadW - 14, lightColor(sim, 'NS')); // top (NS)
+  drawLight(ctx, cx, cy + roadW + 14, lightColor(sim, 'NS')); // bottom
+  drawLight(ctx, cx - roadW - 14, cy, lightColor(sim, 'EW')); // left
+  drawLight(ctx, cx + roadW + 14, cy, lightColor(sim, 'EW')); // right
+
+  // Cars
+  for (const c of sim.cars) {
+    ctx.fillStyle = c.waiting ? '#fbbf24' : '#4ade80';
+    if (c.dir === 'N' || c.dir === 'S') {
+      ctx.fillRect(c.x - 4, c.y - 7, 8, 14);
+    } else {
+      ctx.fillRect(c.x - 7, c.y - 4, 14, 8);
+    }
+  }
+}
+
+function drawLight(ctx, x, y, color) {
+  ctx.fillStyle = '#111';
+  ctx.beginPath();
+  ctx.roundRect(x - 8, y - 8, 16, 16, 3);
+  ctx.fill();
+  const colors = { red: '#ef4444', yellow: '#facc15', green: '#22c55e' };
+  ctx.fillStyle = colors[color] || '#333';
+  ctx.beginPath();
+  ctx.arc(x, y, 5, 0, Math.PI * 2);
+  ctx.fill();
+  // glow
+  ctx.shadowColor = colors[color] || 'transparent';
+  ctx.shadowBlur = 10;
+  ctx.beginPath();
+  ctx.arc(x, y, 5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+}
+
+function updateMetrics(sim, prefix) {
+  document.getElementById(prefix + '_passed').textContent = sim.passed;
+  const avgW = sim.totalPassed > 0 ? ((sim.totalWait / sim.totalPassed) / 60).toFixed(1) : '0.0';
+  document.getElementById(prefix + '_wait').textContent = avgW;
+  document.getElementById(prefix + '_cong').textContent = congestionLabel(sim);
+  document.getElementById(prefix + '_adapt').textContent = sim.adaptations;
+}
+
+function updateStatusSteps(sim) {
+  for (let i = 1; i <= 4; i++) {
+    document.getElementById('st' + i).classList.toggle('active', sim.statusStep === i - 1);
+  }
+  const msgs = ['Monitoring traffic flow...', 'Evaluating congestion levels...', 'Adapting signal timing...', 'Redeploying updated strategy.'];
+  document.getElementById('statusText').textContent = msgs[sim.statusStep] || msgs[0];
+}
+
+function frame() {
+  if (!running) return;
+  resize();
+  frameTick++;
+
+  const wS = cvS.width, hS = cvS.height;
+  const wE = cvE.width, hE = cvE.height;
+
+  spawnCar(simS, wS, hS);
+  spawnCar(simE, wE, hE);
+
+  updateLight(simS);
+  updateLight(simE);
+  adaptiveLogic(simE);
+
+  updateCars(simS, wS, hS);
+  updateCars(simE, wE, hE);
+
+  drawSim(ctxS, simS, wS, hS);
+  drawSim(ctxE, simE, wE, hE);
+
+  updateMetrics(simS, 's');
+  updateMetrics(simE, 'e');
+  updateStatusSteps(simE);
+
+  animId = requestAnimationFrame(frame);
+}
+
+function start() {
+  if (running) return;
+  running = true;
+  resize();
+  frame();
+}
+
+function pause() {
+  running = false;
+  if (animId) cancelAnimationFrame(animId);
+  document.getElementById('statusText').textContent = 'Paused.';
+}
+
+function reset() {
+  pause();
+  initSims();
+  resize();
+  // Clear canvases
+  ctxS.clearRect(0, 0, cvS.width, cvS.height);
+  ctxE.clearRect(0, 0, cvE.width, cvE.height);
+  updateMetrics(simS, 's');
+  updateMetrics(simE, 'e');
+  for (let i = 1; i <= 4; i++) document.getElementById('st' + i).classList.remove('active');
+  document.getElementById('statusText').textContent = 'Idle — press Start to begin.';
+}
+
+resize();
+</script>
+</body>
+</html>
