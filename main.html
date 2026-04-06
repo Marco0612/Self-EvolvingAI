@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Self-Evolving AI Simulation</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: #f4f7fb;
+      color: #1f2937;
+    }
+    .container {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 8px;
+      font-size: 2rem;
+    }
+    .subtitle {
+      text-align: center;
+      color: #4b5563;
+      margin-top: 0;
+      margin-bottom: 24px;
+      line-height: 1.5;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1.1fr 1fr;
+      gap: 20px;
+    }
+    .card {
+      background: white;
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+    }
+    h2 {
+      margin-top: 0;
+      margin-bottom: 12px;
+      font-size: 1.25rem;
+    }
+    p { line-height: 1.6; }
+    .control-group {
+      margin-top: 16px;
+      margin-bottom: 18px;
+    }
+    .control-group label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: bold;
+    }
+    input[type="range"] { width: 100%; }
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 18px;
+      margin-bottom: 18px;
+    }
+    button {
+      border: none;
+      border-radius: 10px;
+      padding: 10px 16px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: transform 0.15s ease, opacity 0.15s ease;
+    }
+    button:hover {
+      transform: translateY(-1px);
+      opacity: 0.95;
+    }
+    .start { background: #2563eb; color: white; }
+    .pause { background: #d97706; color: white; }
+    .adapt { background: #16a34a; color: white; }
+    .reset { background: #dc2626; color: white; }
+    .status {
+      margin-top: 8px;
+      padding: 14px;
+      border-left: 5px solid #2563eb;
+      background: #eff6ff;
+      border-radius: 10px;
+      line-height: 1.5;
+    }
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 10px;
+      margin-top: 18px;
+      margin-bottom: 18px;
+    }
+    .node {
+      text-align: center;
+      background: #eef2ff;
+      border: 2px solid #c7d2fe;
+      border-radius: 12px;
+      padding: 14px 8px;
+      font-weight: bold;
+      transition: all 0.25s ease;
+      min-height: 76px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .node.active {
+      background: #dcfce7;
+      border-color: #22c55e;
+      transform: scale(1.03);
+      box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.12);
+    }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-top: 8px;
+    }
+    .stat-box {
+      background: #f8fafc;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 12px;
+    }
+    .stat-box strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 0.95rem;
+    }
+    .stat-value {
+      font-size: 1.1rem;
+      font-weight: bold;
+    }
+    .legend-note {
+      margin-top: 10px;
+      color: #6b7280;
+      font-size: 0.92rem;
+    }
+    canvas { max-height: 460px; }
+    .tips {
+      margin-top: 16px;
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 14px;
+    }
+    .tips strong {
+      display: block;
+      margin-bottom: 8px;
+    }
+    ul { margin: 8px 0 0 18px; padding: 0; }
+    li { margin-bottom: 6px; }
+    @media (max-width: 980px) {
+      .grid { grid-template-columns: 1fr; }
+      .flow { grid-template-columns: repeat(2, 1fr); }
+      .stats { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 640px) {
+      .stats { grid-template-columns: 1fr; }
+      .flow { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Self-Evolving AI Simulation</h1>
+    <p class="subtitle">
+      A real-time conceptual prototype comparing a static AI model and a self-evolving AI system
+      under concept drift, delayed adaptation, and changing environmental conditions.
+    </p>
+
+    <div class="grid">
+      <div class="card">
+        <h2>Environment and System Controls</h2>
+        <p>
+          This simulation illustrates how a static AI model gradually loses performance in a changing
+          environment, while a self-evolving AI system detects degradation, adapts with a delay,
+          and partially recovers.
+        </p>
+
+        <div class="control-group">
+          <label for="driftSlider">
+            Concept Drift Intensity: <span id="driftValue">20</span>%
+          </label>
+          <input type="range" id="driftSlider" min="0" max="100" value="20" />
+        </div>
+
+        <div class="control-group">
+          <label for="noiseSlider">
+            Environmental Noise: <span id="noiseValue">10</span>%
+          </label>
+          <input type="range" id="noiseSlider" min="0" max="100" value="10" />
+        </div>
+
+        <div class="controls">
+          <button class="start" onclick="startSimulation()">Start</button>
+          <button class="pause" onclick="pauseSimulation()">Pause</button>
+          <button class="adapt" onclick="manualAdapt()">Trigger Adaptation</button>
+          <button class="reset" onclick="resetSimulation()">Reset</button>
+        </div>
+
+        <div class="status" id="statusBox">
+          Status: Waiting to start simulation.
+        </div>
+
+        <div class="flow">
+          <div class="node" id="nodeData">Data Input</div>
+          <div class="node" id="nodePredict">Prediction</div>
+          <div class="node" id="nodeEvaluate">Evaluation</div>
+          <div class="node" id="nodeAdapt">Adaptation</div>
+          <div class="node" id="nodeDeploy">Redeployment</div>
+        </div>
+
+        <div class="stats">
+          <div class="stat-box">
+            <strong>Static Model Accuracy</strong>
+            <div class="stat-value" id="staticAccuracy">96.0%</div>
+          </div>
+
+          <div class="stat-box">
+            <strong>Self-Evolving Accuracy</strong>
+            <div class="stat-value" id="evolvingAccuracy">96.0%</div>
+          </div>
+
+          <div class="stat-box">
+            <strong>Adaptation Count</strong>
+            <div class="stat-value" id="adaptCount">0</div>
+          </div>
+
+          <div class="stat-box">
+            <strong>Current Drift Level</strong>
+            <div class="stat-value" id="driftLevelDisplay">0.00</div>
+          </div>
+
+          <div class="stat-box">
+            <strong>System State</strong>
+            <div class="stat-value" id="systemState">Idle</div>
+          </div>
+
+          <div class="stat-box">
+            <strong>Energy Cost</strong>
+            <div class="stat-value" id="energyCost">0.0 units</div>
+          </div>
+        </div>
+
+        <div class="tips">
+          <strong>Demo idea for class</strong>
+          <ul>
+            <li>Start with low drift and low noise.</li>
+            <li>Let both models run for a few seconds.</li>
+            <li>Increase concept drift and show how the static model degrades faster.</li>
+            <li>Wait for the self-evolving model to detect the issue and adapt.</li>
+            <li>Use the energy cost to connect with environmental impact.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Performance Over Time</h2>
+        <canvas id="performanceChart"></canvas>
+        <div class="legend-note">
+          Red line = Static model. Blue line = Self-evolving model.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const driftSlider = document.getElementById("driftSlider");
+    const driftValue = document.getElementById("driftValue");
+    const noiseSlider = document.getElementById("noiseSlider");
+    const noiseValue = document.getElementById("noiseValue");
+    const statusBox = document.getElementById("statusBox");
+
+    driftSlider.addEventListener("input", () => {
+      driftValue.textContent = driftSlider.value;
+    });
+
+    noiseSlider.addEventListener("input", () => {
+      noiseValue.textContent = noiseSlider.value;
+    });
+
+    const ctx = document.getElementById("performanceChart").getContext("2d");
+
+    let labels = [];
+    let staticData = [];
+    let evolvingData = [];
+
+    let tick = 0;
+    let interval = null;
+    let adaptationCount = 0;
+
+    let staticAccuracy = 96;
+    let evolvingAccuracy = 96;
+
+    let driftLevel = 0;
+    let detectedDriftScore = 0;
+    let adapting = false;
+    let adaptationTimer = 0;
+    let energyCost = 0;
+
+    const maxPoints = 60;
+
+    const chart = new Chart(ctx, {
+      type: "line",
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: "Static Model",
+            data: staticData,
+            borderColor: "red",
+            backgroundColor: "transparent",
+            tension: 0.3,
+            pointRadius: 0,
+            borderWidth: 3
+          },
+          {
+            label: "Self-Evolving Model",
+            data: evolvingData,
+            borderColor: "blue",
+            backgroundColor: "transparent",
+            tension: 0.3,
+            pointRadius: 0,
+            borderWidth: 3
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        animation: false,
+        interaction: {
+          mode: "index",
+          intersect: false
+        },
+        plugins: {
+          legend: {
+            display: true
+          },
+          tooltip: {
+            enabled: true
+          }
+        },
+        scales: {
+          y: {
+            min: 0,
+            max: 100,
+            title: {
+              display: true,
+              text: "Accuracy (%)"
+            }
+          },
+          x: {
+            title: {
+              display: true,
+              text: "Time Step"
+            }
+          }
+        }
+      }
+    });
+
+    function clamp(value, min, max) {
+      return Math.max(min, Math.min(max, value));
+    }
+
+    function sigmoid(x) {
+      return 1 / (1 + Math.exp(-x));
+    }
+
+    function updateStats() {
+      document.getElementById("staticAccuracy").textContent = staticAccuracy.toFixed(1) + "%";
+      document.getElementById("evolvingAccuracy").textContent = evolvingAccuracy.toFixed(1) + "%";
+      document.getElementById("adaptCount").textContent = adaptationCount;
+      document.getElementById("driftLevelDisplay").textContent = driftLevel.toFixed(2);
+      document.getElementById("energyCost").textContent = energyCost.toFixed(1) + " units";
+    }
+
+    function setSystemState(text) {
+      document.getElementById("systemState").textContent = text;
+    }
+
+    function activateNode(nodeId) {
+      const nodes = ["nodeData", "nodePredict", "nodeEvaluate", "nodeAdapt", "nodeDeploy"];
+      nodes.forEach(id => document.getElementById(id).classList.remove("active"));
+      const node = document.getElementById(nodeId);
+      if (node) node.classList.add("active");
+    }
+
+    function clearNodes() {
+      const nodes = ["nodeData", "nodePredict", "nodeEvaluate", "nodeAdapt", "nodeDeploy"];
+      nodes.forEach(id => document.getElementById(id).classList.remove("active"));
+    }
+
+    function simulateStep() {
+      tick++;
+
+      const userDrift = Number(driftSlider.value) / 100;
+      const noise = Number(noiseSlider.value) / 100;
+
+      driftLevel += 0.015 + userDrift * 0.04 + (Math.random() - 0.5) * 0.01;
+      driftLevel = clamp(driftLevel, 0, 1.2);
+
+      const staticDamage =
+        0.15 +
+        1.4 * sigmoid((driftLevel - 0.35) * 5) +
+        noise * 0.5 +
+        Math.random() * 0.12;
+
+      const evolvingDamage =
+        0.10 +
+        0.95 * sigmoid((driftLevel - 0.45) * 5) +
+        noise * 0.3 +
+        Math.random() * 0.08;
+
+      staticAccuracy -= staticDamage;
+      evolvingAccuracy -= evolvingDamage;
+
+      activateNode("nodeData");
+      setSystemState(adapting ? "Adapting" : "Running");
+      statusBox.textContent = "Status: New environmental data is entering the system.";
+
+      setTimeout(() => {
+        activateNode("nodePredict");
+        statusBox.textContent = "Status: Both models are generating predictions.";
+      }, 120);
+
+      setTimeout(() => {
+        activateNode("nodeEvaluate");
+        statusBox.textContent = "Status: Evaluating performance under concept drift.";
+      }, 250);
+
+      if (evolvingAccuracy < 88) {
+        detectedDriftScore += 0.18;
+      } else {
+        detectedDriftScore -= 0.08;
+      }
+      detectedDriftScore = clamp(detectedDriftScore, 0, 1);
+
+      if (!adapting && detectedDriftScore > 0.65) {
+        adapting = true;
+        adaptationTimer = 3;
+
+        setTimeout(() => {
+          activateNode("nodeAdapt");
+          setSystemState("Adapting");
+          statusBox.textContent = "Status: Drift detected. Self-evolving model is adapting.";
+        }, 400);
+      }
+
+      if (adapting) {
+        adaptationTimer--;
+        energyCost += 6;
+
+        if (adaptationTimer <= 0) {
+          adapting = false;
+          adaptationCount++;
+
+          const recovery = 8 + (1 - driftLevel) * 10 + Math.random() * 2;
+          evolvingAccuracy += recovery;
+
+          detectedDriftScore = 0.2;
+
+          activateNode("nodeDeploy");
+          setSystemState("Redeploying");
+          statusBox.textContent = "Status: Adaptation complete. Updated model redeployed.";
+        }
+      }
+
+      energyCost += 1.4 + driftLevel * 2.2 + noise * 0.8;
+
+      staticAccuracy = clamp(staticAccuracy, 0, 100);
+      evolvingAccuracy = clamp(evolvingAccuracy, 0, 100);
+
+      labels.push(tick);
+      staticData.push(Number(staticAccuracy.toFixed(2)));
+      evolvingData.push(Number(evolvingAccuracy.toFixed(2)));
+
+      if (labels.length > maxPoints) {
+        labels.shift();
+        staticData.shift();
+        evolvingData.shift();
+      }
+
+      chart.update();
+      updateStats();
+
+      if (!adapting && evolvingAccuracy >= 88) {
+        setSystemState("Running");
+      }
+
+      if (staticAccuracy < 60 && !adapting) {
+        statusBox.textContent = "Status: Static model is failing under severe concept drift.";
+      }
+    }
+
+    function startSimulation() {
+      if (interval) return;
+      statusBox.textContent = "Status: Simulation started.";
+      setSystemState("Running");
+      interval = setInterval(simulateStep, 900);
+    }
+
+    function pauseSimulation() {
+      clearInterval(interval);
+      interval = null;
+      statusBox.textContent = "Status: Simulation paused.";
+      setSystemState("Paused");
+      clearNodes();
+    }
+
+    function manualAdapt() {
+      adaptationCount++;
+      evolvingAccuracy += 10;
+      evolvingAccuracy = clamp(evolvingAccuracy, 0, 100);
+      energyCost += 8;
+      activateNode("nodeAdapt");
+      setSystemState("Manual adaptation");
+      statusBox.textContent = "Status: Manual adaptation triggered for the self-evolving model.";
+      updateStats();
+      chart.update();
+
+      setTimeout(() => {
+        activateNode("nodeDeploy");
+        statusBox.textContent = "Status: Manually adapted model redeployed.";
+      }, 300);
+    }
+
+    function resetSimulation() {
+      clearInterval(interval);
+      interval = null;
+
+      tick = 0;
+      adaptationCount = 0;
+      staticAccuracy = 96;
+      evolvingAccuracy = 96;
+      driftLevel = 0;
+      detectedDriftScore = 0;
+      adapting = false;
+      adaptationTimer = 0;
+      energyCost = 0;
+
+      labels.length = 0;
+      staticData.length = 0;
+      evolvingData.length = 0;
+
+      chart.update();
+      updateStats();
+      setSystemState("Idle");
+      statusBox.textContent = "Status: Simulation reset.";
+      clearNodes();
+    }
+
+    updateStats();
+  </script>
+</body>
+</html>
