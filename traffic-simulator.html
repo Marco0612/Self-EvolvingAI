@@ -30,7 +30,7 @@
   .panel:first-child .panel-title { background: #1e293b; color: #f87171; }
   .panel:last-child .panel-title { background: #1e293b; color: #60a5fa; }
 
-  canvas { flex: 1; width: 100%; background: #1a1f2e; display: block; }
+  .panel canvas { flex: 1; width: 100%; background: #1a1f2e; display: block; }
 
   .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; background: #12141f; border-top: 1px solid #2a2d3e; }
   .metric { text-align: center; padding: 7px 4px; border-right: 1px solid #222; }
@@ -47,6 +47,18 @@
   .status-step.active { color: #a5b4fc; }
   .status-step .dot { width: 7px; height: 7px; border-radius: 50%; background: #333; }
   .status-step.active .dot { background: #6366f1; box-shadow: 0 0 6px #6366f1; }
+
+  .btn-graph { background: #6366f1; color: #fff; }
+  .btn-graph:hover { background: #4f46e5; }
+  .btn-graph.active { background: #4f46e5; box-shadow: 0 0 8px #6366f1; }
+
+  .graph-view { display: none; height: calc(100vh - 140px); background: #1a1f2e; padding: 20px; overflow-y: auto; }
+  .graph-view.visible { display: block; }
+  .graph-view canvas { width: 100%; height: 220px; background: #12141f; border-radius: 8px; margin-bottom: 16px; border: 1px solid #2a2d3e; display: block; }
+  .graph-title { font-size: 0.85rem; font-weight: 700; color: #ccc; margin-bottom: 6px; letter-spacing: 0.5px; }
+  .graph-legend { display: flex; gap: 18px; margin-bottom: 12px; font-size: 0.72rem; }
+  .graph-legend span { display: flex; align-items: center; gap: 5px; }
+  .graph-legend .swatch { width: 12px; height: 3px; border-radius: 2px; display: inline-block; }
 </style>
 </head>
 <body>
@@ -60,6 +72,7 @@
   <button class="btn-start" onclick="start()">▶ Start</button>
   <button class="btn-pause" onclick="pause()">⏸ Pause</button>
   <button class="btn-reset" onclick="reset()">↺ Reset</button>
+  <button class="btn-graph" id="btnGraph" onclick="toggleGraph()">📊 Graphs</button>
   <div class="slider-group">
     <span>Traffic Intensity:</span>
     <input type="range" id="intensitySlider" min="1" max="10" value="4">
@@ -92,6 +105,19 @@
   </div>
 </div>
 
+<div class="graph-view" id="graphView">
+  <div class="graph-legend">
+    <span><span class="swatch" style="background:#f87171"></span> Static AI</span>
+    <span><span class="swatch" style="background:#60a5fa"></span> Self-Evolving AI</span>
+  </div>
+  <div class="graph-title">Cars Passed (cumulative)</div>
+  <canvas id="gPassed"></canvas>
+  <div class="graph-title">Avg Wait Time (seconds)</div>
+  <canvas id="gWait"></canvas>
+  <div class="graph-title">Waiting Cars (congestion)</div>
+  <canvas id="gCong"></canvas>
+</div>
+
 <div class="status-bar">
   <span class="status-label">Self-Evolving AI:</span>
   <span class="status-step" id="st1"><span class="dot"></span> Monitoring</span>
@@ -111,10 +137,27 @@ const cvE = document.getElementById('cvEvolving');
 const ctxS = cvS.getContext('2d');
 const ctxE = cvE.getContext('2d');
 
-let running = false, animId = null;
+let running = false, animId = null, graphMode = false;
+
+// --- Graph Data ---
+const graphData = { sPassed:[], ePassed:[], sWait:[], eWait:[], sCong:[], eCong:[], labels:[] };
+const MAX_POINTS = 300;
+
+function resetGraphData() {
+  for (const k in graphData) graphData[k] = [];
+}
+
+let lastWS = 600, lastHS = 400, lastWE = 600, lastHE = 400;
 
 function resize() {
-  [cvS, cvE].forEach(c => { c.width = c.clientWidth; c.height = c.clientHeight; });
+  [cvS, cvE].forEach(c => {
+    const cw = c.clientWidth, ch = c.clientHeight;
+    if (cw > 0 && ch > 0) { c.width = cw; c.height = ch; }
+  });
+  if (cvS.width > 0) lastWS = cvS.width;
+  if (cvS.height > 0) lastHS = cvS.height;
+  if (cvE.width > 0) lastWE = cvE.width;
+  if (cvE.height > 0) lastHE = cvE.height;
 }
 window.addEventListener('resize', resize);
 
@@ -155,6 +198,104 @@ function initSims() {
   frameTick = 0;
 }
 initSims();
+
+function toggleGraph() {
+  graphMode = !graphMode;
+  document.getElementById('graphView').classList.toggle('visible', graphMode);
+  document.querySelector('.main').style.display = graphMode ? 'none' : 'grid';
+  document.getElementById('btnGraph').classList.toggle('active', graphMode);
+  if (graphMode) drawAllGraphs();
+}
+
+function sampleGraphData() {
+  const t = (frameTick / 60).toFixed(0);
+  graphData.labels.push(t);
+  graphData.sPassed.push(simS.passed);
+  graphData.ePassed.push(simE.passed);
+  graphData.sWait.push(simS.totalPassed > 0 ? +(simS.totalWait / simS.totalPassed / 60).toFixed(2) : 0);
+  graphData.eWait.push(simE.totalPassed > 0 ? +(simE.totalWait / simE.totalPassed / 60).toFixed(2) : 0);
+  graphData.sCong.push(simS.cars.filter(c => c.waiting).length);
+  graphData.eCong.push(simE.cars.filter(c => c.waiting).length);
+  if (graphData.labels.length > MAX_POINTS) {
+    for (const k in graphData) graphData[k].shift();
+  }
+}
+
+function drawGraph(canvasId, dataS, dataE, integerAxis) {
+  const cv = document.getElementById(canvasId);
+  const rect = cv.getBoundingClientRect();
+  cv.width = rect.width || cv.clientWidth || 600;
+  cv.height = rect.height || cv.clientHeight || 220;
+  const ctx = cv.getContext('2d');
+  const w = cv.width, h = cv.height;
+  if (w < 10 || h < 10) return;
+  const pad = { t: 18, b: 28, l: 48, r: 16 };
+  const gw = w - pad.l - pad.r, gh = h - pad.t - pad.b;
+
+  ctx.fillStyle = '#12141f';
+  ctx.fillRect(0, 0, w, h);
+
+  if (dataS.length < 2) {
+    ctx.fillStyle = '#555';
+    ctx.font = '12px Segoe UI';
+    ctx.textAlign = 'center';
+    ctx.fillText('Waiting for data...', w / 2, h / 2);
+    return;
+  }
+
+  const allVals = dataS.concat(dataE);
+  let maxV = Math.max(...allVals, 1);
+  if (integerAxis) maxV = Math.ceil(maxV);
+  else maxV = Math.ceil(maxV * 10) / 10;
+
+  // Grid lines
+  const gridLines = 4;
+  ctx.strokeStyle = '#252a3a';
+  ctx.lineWidth = 1;
+  ctx.font = '10px Segoe UI';
+  ctx.fillStyle = '#666';
+  ctx.textAlign = 'right';
+  for (let i = 0; i <= gridLines; i++) {
+    const y = pad.t + gh - (i / gridLines) * gh;
+    const val = (maxV * i / gridLines);
+    ctx.beginPath();
+    ctx.moveTo(pad.l, y);
+    ctx.lineTo(pad.l + gw, y);
+    ctx.stroke();
+    ctx.fillText(integerAxis ? Math.round(val) : val.toFixed(1), pad.l - 6, y + 3);
+  }
+
+  // X-axis labels
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#555';
+  const labels = graphData.labels;
+  const step = Math.max(1, Math.floor(labels.length / 6));
+  for (let i = 0; i < labels.length; i += step) {
+    const x = pad.l + (i / (labels.length - 1)) * gw;
+    ctx.fillText(labels[i] + 's', x, h - 8);
+  }
+
+  // Draw lines
+  function drawLine(data, color) {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let i = 0; i < data.length; i++) {
+      const x = pad.l + (i / (data.length - 1)) * gw;
+      const y = pad.t + gh - (data[i] / maxV) * gh;
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+  drawLine(dataS, '#f87171');
+  drawLine(dataE, '#60a5fa');
+}
+
+function drawAllGraphs() {
+  drawGraph('gPassed', graphData.sPassed, graphData.ePassed, true);
+  drawGraph('gWait', graphData.sWait, graphData.eWait, false);
+  drawGraph('gCong', graphData.sCong, graphData.eCong, true);
+}
 
 function spawnCar(sim, w, h) {
   const intensity = +intensitySlider.value;
@@ -386,8 +527,8 @@ function frame() {
   resize();
   frameTick++;
 
-  const wS = cvS.width, hS = cvS.height;
-  const wE = cvE.width, hE = cvE.height;
+  const wS = lastWS, hS = lastHS;
+  const wE = lastWE, hE = lastHE;
 
   spawnCar(simS, wS, hS);
   spawnCar(simE, wE, hE);
@@ -399,8 +540,13 @@ function frame() {
   updateCars(simS, wS, hS);
   updateCars(simE, wE, hE);
 
-  drawSim(ctxS, simS, wS, hS);
-  drawSim(ctxE, simE, wE, hE);
+  if (!graphMode) {
+    drawSim(ctxS, simS, wS, hS);
+    drawSim(ctxE, simE, wE, hE);
+  }
+
+  if (frameTick % 30 === 0) sampleGraphData();
+  if (graphMode && frameTick % 30 === 0) drawAllGraphs();
 
   updateMetrics(simS, 's');
   updateMetrics(simE, 'e');
@@ -425,6 +571,7 @@ function pause() {
 function reset() {
   pause();
   initSims();
+  resetGraphData();
   resize();
   // Clear canvases
   ctxS.clearRect(0, 0, cvS.width, cvS.height);
